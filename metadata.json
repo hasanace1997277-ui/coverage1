@@ -1,0 +1,6 @@
+{
+  "name": "AeroTimer - Flight Timing & Turnaround Operations Log",
+  "description": "Log, manage, and analyze scheduled vs. actual flight turnaround timings (STA, STD, ATA, ATD) with real-time server persistence and operations analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
