@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Lock, KeyRound, Check, AlertCircle } from 'lucide-react';
+import { changeAdminPassword } from '../utils/storageService';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -38,24 +39,18 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/admin/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const result = await changeAdminPassword(currentPassword, newPassword);
+      if (result.success) {
         setSuccessMessage('Administrator password changed successfully!');
         setTimeout(() => {
           onPasswordChanged();
           onClose();
         }, 1500);
       } else {
-        setError(json.error || 'Failed to update password');
+        setError(result.error || 'Failed to update password');
       }
     } catch {
-      setError('Server communication error');
+      setError('Communication error');
     } finally {
       setIsSubmitting(false);
     }

@@ -5,6 +5,7 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface ServerTableViewProps {
   flights: FlightTimingRecord[];
+  storageMode?: 'server' | 'local';
   onResetData: (mode: 'blank' | 'initial') => void;
   onExportCsv: () => void;
   onOpenEditModal: (flight: FlightTimingRecord) => void;
@@ -14,6 +15,7 @@ interface ServerTableViewProps {
 
 export const ServerTableView: React.FC<ServerTableViewProps> = ({
   flights,
+  storageMode = 'server',
   onResetData,
   onExportCsv,
   onOpenEditModal,
@@ -174,9 +176,13 @@ export const ServerTableView: React.FC<ServerTableViewProps> = ({
         </div>
 
         {/* Table Footer */}
-        <div className="border-t border-slate-800 bg-slate-900/60 px-4 py-3 flex items-center justify-between text-xs text-slate-400 font-sans">
+        <div className="border-t border-slate-800 bg-slate-900/60 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-400 font-sans">
           <span>Showing {filteredFlights.length} of {flights.length} flights</span>
-          <span>Stored on server at /data/flight_records.json</span>
+          <span className="font-mono text-[11px] text-emerald-400">
+            {storageMode === 'server'
+              ? '● Live Node/Express Backend (/data/flight_records.json)'
+              : '● Browser Storage Mode (GitHub Pages Static)'}
+          </span>
         </div>
       </div>
 

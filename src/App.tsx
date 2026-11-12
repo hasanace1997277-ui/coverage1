@@ -5,11 +5,21 @@ import { MobileFlightRecorder } from './components/MobileFlightRecorder';
 import { ServerTableView } from './components/ServerTableView';
 import { EditFlightModal } from './components/EditFlightModal';
 import { FlightTimingRecord } from './types/flight';
+import {
+  fetchAllFlights,
+  createFlightRecord,
+  updateFlightRecord,
+  deleteFlightRecord,
+  resetFlights,
+  verifyAdminPassword,
+  downloadFlightsCsv
+} from './utils/storageService';
 import { CheckCircle2, Clock } from 'lucide-react';
 
 export default function App() {
   const [appState, setAppState] = useState<'PORTAL' | 'COVERAGE' | 'SERVER'>('PORTAL');
   const [flights, setFlights] = useState<FlightTimingRecord[]>([]);
+  const [storageMode, setStorageMode] = useState<'server' | 'local'>('server');
   const [coverageMan, setCoverageMan] = useState<string>(() => {
     return localStorage.getItem('aerotimer_coverage_name') || '';
   });
@@ -30,16 +40,12 @@ export default function App() {
     }, 3000);
   };
 
-  // Load flights from server
+  // Load flights using unified storage service
   const loadFlights = useCallback(async () => {
     try {
-      const res = await fetch('/api/flights');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          setFlights(json.data);
-        }
-      }
+      const result = await fetchAllFlights();
+      setFlights(result.flights);
+      setStorageMode(result.mode);
     } catch (err) {
       console.error('Failed to load flights:', err);
     } finally {
@@ -64,13 +70,8 @@ export default function App() {
   // Handle portal selection: Enter Server
   const handleSelectServer = async (password: string): Promise<boolean> => {
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const ok = await verifyAdminPassword(password);
+      if (ok) {
         setAppState('SERVER');
         showToast('Logged into Server Master Table');
         return true;
@@ -86,20 +87,13 @@ export default function App() {
   const handleSaveNewFlight = async (flightData: Partial<FlightTimingRecord>) => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/flights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...flightData,
-          coverageMan: flightData.coverageMan || coverageMan,
-          coverageId: flightData.coverageId || coverageId,
-        }),
+      const newRecord = await createFlightRecord({
+        ...flightData,
+        coverageMan: flightData.coverageMan || coverageMan,
+        coverageId: flightData.coverageId || coverageId,
       });
-      if (res.ok) {
-        const json = await res.json();
-        setFlights(prev => [json.data, ...prev]);
-        showToast(`Flight ${json.data.flight} saved to server table!`);
-      }
+      setFlights(prev => [newRecord, ...prev.filter(f => f.id !== newRecord.id)]);
+      showToast(`Flight ${newRecord.flight} saved to server table!`);
     } catch (err) {
       console.error('Save failed:', err);
       showToast('Error saving flight to server');
@@ -115,16 +109,9 @@ export default function App() {
     );
 
     try {
-      const res = await fetch(`/api/flights/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setFlights(prev => prev.map(f => (f.id === id ? json.data : f)));
-        showToast('Timings updated on server');
-      }
+      const updated = await updateFlightRecord(id, updates);
+      setFlights(prev => prev.map(f => (f.id === id ? updated : f)));
+      showToast('Timings updated on server');
     } catch (err) {
       console.error('Update failed:', err);
     }
@@ -135,7 +122,7 @@ export default function App() {
     const flightToDelete = flights.find(f => f.id === id);
     setFlights(prev => prev.filter(f => f.id !== id));
     try {
-      await fetch(`/api/flights/${id}`, { method: 'DELETE' });
+      await deleteFlightRecord(id);
       showToast(`Flight ${flightToDelete?.flight || ''} deleted`);
     } catch (err) {
       console.error('Delete failed:', err);
@@ -146,12 +133,9 @@ export default function App() {
   const handleResetData = async (mode: 'blank' | 'initial') => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/flights/reset?mode=${mode}`, { method: 'POST' });
-      if (res.ok) {
-        const json = await res.json();
-        setFlights(json.data);
-        showToast('Reset server table to initial sheet rows');
-      }
+      const resetSet = await resetFlights(mode);
+      setFlights(resetSet);
+      showToast('Reset server table to initial sheet rows');
     } catch (err) {
       console.error('Reset failed:', err);
     } finally {
@@ -159,10 +143,10 @@ export default function App() {
     }
   };
 
-  // Export CSV
+  // Export CSV (works both on live server and on GitHub Pages static)
   const handleExportCsv = () => {
-    window.location.href = '/api/flights/export.csv';
-    showToast('Downloading server table CSV...');
+    downloadFlightsCsv(flights);
+    showToast('Downloaded flight coverage CSV');
   };
 
   // If at portal gate, render the opening screen
@@ -226,6 +210,7 @@ export default function App() {
         ) : (
           <ServerTableView
             flights={flights}
+            storageMode={storageMode}
             onResetData={handleResetData}
             onExportCsv={handleExportCsv}
             onOpenEditModal={flight => {
